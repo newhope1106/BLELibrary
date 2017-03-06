@@ -362,6 +362,7 @@ public class BLEManager {
 
     /**
      * 开始扫描设备，缺省的时间是{@link #TIME_OUT_SCAN}
+     * @param callback 扫描结果回调
      * */
     public void scanDevices(DeviceScanCallback callback) {
         scanDevices(TIME_OUT_SCAN, callback);
@@ -370,6 +371,7 @@ public class BLEManager {
     /**
      * 开始扫描设备
      * @param timeout 超时时间
+     * @param callback 扫描结果回调
      * */
     public void scanDevices(int timeout, DeviceScanCallback callback) {
         logd("[scanDevices] timeout = " + timeout);
