@@ -12,6 +12,7 @@ import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Message;
 import android.os.SystemClock;
 import android.text.TextUtils;
@@ -64,6 +65,11 @@ public class BLEManager {
     private static String sCharacteristicUUID;
 
     /**
+     * 发送消息
+     * */
+    private static final int MESSAGE_SEND = 1000;
+
+    /**
      * 重试连接
      * */
     private static final int MESSAGE_RETRY = 1001;
@@ -103,6 +109,8 @@ public class BLEManager {
      * */
     private BluetoothGattCallback mBluetoothGattCallback;
 
+    private BluetoothGatt mCurrentBluetoothGatt = null;
+
     /**
      * 蓝牙扫描结果回调
      * */
@@ -122,6 +130,21 @@ public class BLEManager {
      * 是否已经关闭
      * */
     private volatile boolean mIsShutdown = false;
+
+    /**
+     * 发送消息Handler，线程中处理发送，避免阻塞主线程
+     * */
+    private Handler mMessageHandler = null;
+
+    /**
+     * 当前全局数据
+     * */
+    private byte[] mGlobalResultBytes = null;
+
+    /**
+     * 线程，提供looper
+     * */
+    private HandlerThread mMessageThread;
 
     private Handler mMainHandler = new Handler() {
         @Override
@@ -226,6 +249,7 @@ public class BLEManager {
                 if(status == BluetoothGatt.GATT_SUCCESS) {
                     if (newState == BluetoothGatt.STATE_CONNECTED) {//连接成功
                         gatt.discoverServices();
+                        mCurrentBluetoothGatt = gatt;
                         logd("连接成功");
                     }
                 } else {
@@ -272,6 +296,18 @@ public class BLEManager {
             public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
                 logd("onCharacteristicChanged: "+ Arrays.toString(characteristic.getValue()));
                 byte[] value = characteristic.getValue();
+
+                mGlobalResultBytes = BLEDataUtil.decode(value, mGlobalResultBytes);
+                if(BLEDataUtil.isEnd(value)) {
+                    String result = new String(mGlobalResultBytes);
+                    logd("result : " + result);
+
+                    if(mConnectCallback!=null){
+                        mConnectCallback.onReceive(result);
+                    }
+
+                    mGlobalResultBytes = null;
+                }
 
                 super.onCharacteristicChanged(gatt, characteristic);
             }
@@ -401,6 +437,110 @@ public class BLEManager {
     }
 
     /**
+     * 发送数据
+     * @param data 数据
+     * */
+    public void sendData(final String data) {
+        Message message = Message.obtain();
+        message.what = MESSAGE_SEND;
+        message.obj = data;
+
+        if(mMessageHandler == null) {
+            setupMessageHandler();
+        }
+    }
+
+    /**
+     * 初始化MessageHandler
+     * */
+    private void setupMessageHandler() {
+        if(mMessageHandler == null) {
+            if(mMessageThread == null) {
+                mMessageThread = new HandlerThread("thread-send-message");
+            }
+            mMessageThread.start();
+            mMessageHandler = new Handler(mMessageThread.getLooper()) {
+                @Override
+                public void handleMessage(Message message) {
+                    if(mCurrentBluetoothGatt == null) {
+                        return;
+                    }
+
+                    String msg = (String) message.obj;
+
+                    if(!TextUtils.isEmpty(msg)) {
+                        logd("send message : " + msg);
+                        byte[][] packets = BLEDataUtil.encode(msg);
+                        int tryCount  = 3;//最多重发次数
+                        boolean sendSuccess = true;
+                        while(--tryCount > 0) {
+                            sendSuccess = true;
+                            for(int i = 0; i < packets.length; i++) {
+                                byte[] bytes = packets[i];
+                                int onceTryCount = 3;//单次重发次数
+                                boolean onceSendSuccess = true;
+                                BluetoothGattService service = mCurrentBluetoothGatt.getService(UUID.fromString(sServiceUUID));
+                                if(service != null) {
+                                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(sCharacteristicUUID));
+                                    characteristic.setValue(bytes);
+                                    while(--onceTryCount > 0) {
+
+                                        if(mIsShutdown) {
+                                            break;
+                                        }
+
+                                        if(mCurrentBluetoothGatt.writeCharacteristic(characteristic)){
+                                            logd("Write Success, DATA: " + Arrays.toString(characteristic.getValue()));
+                                            onceSendSuccess = true;
+                                            //避免数据发送太快丢失，需要分包延迟发送
+                                            SystemClock.sleep(200);
+                                            break;
+                                        } else {
+                                            logd("Write failed, DATA: " + Arrays.toString(characteristic.getValue()) + ", and left times = " + onceTryCount);
+                                            onceSendSuccess = false;
+                                            //避免数据发送太快丢失，需要分包延迟发送
+                                            SystemClock.sleep(400);//失败的时候，把时间调大
+                                        }
+
+                                    }
+
+                                }
+
+                                if(!onceSendSuccess) {//一次发送，重试三次都未成功则，跳出重发这个数据
+                                    sendSuccess = false;
+                                    break;
+                                }
+
+                                //避免数据发送太快丢失，需要分包延迟发送
+                                SystemClock.sleep(200);
+                            }
+
+                            if(sendSuccess) {
+                                break;
+                            } else {
+                                logd("send msg failed, and try times = " + tryCount);
+                            }
+
+                            if(mIsShutdown) {
+                                logd("give up for disconnected by user");
+                                break;
+                            }
+
+                            //避免数据发送太快丢失，需要分包延迟发送
+                            SystemClock.sleep(200);
+                        }
+
+                        if(!sendSuccess && !mIsShutdown) {
+                            logd("send failed : " + msg);
+                        }
+
+                    }
+                }
+            };
+        }
+    }
+
+    /**
      * 关闭所有连接
      * */
     public void closeConnection() {
@@ -467,6 +607,7 @@ public class BLEManager {
      * */
     public interface ConnectCallback{
         void connectFailed();
+        void onReceive(String data);
     }
 
     /**
