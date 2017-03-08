@@ -80,6 +80,21 @@ public class BLEManager {
     private static final int MESSAGE_CONN_ERROR = 1002;
 
     /**
+     * 连接失败消息
+     * */
+    private static final int MESSAGE_CONN_FAILED = 1003;
+
+    /**
+     * 连接成功消息
+     * */
+    private static final int MESSAGE_CONN_SUCCESS = 1004;
+
+    /**
+     * 收到数据
+     * */
+    private static final int MESSAGE_RECEIVE_DATA = 1005;
+
+    /**
      * 重试延迟时间
      * */
     private static final int RETRY_TIME_DELAY = 3000;
@@ -161,6 +176,28 @@ public class BLEManager {
                     ConnResult connResult = (ConnResult) msg.obj;
                     if (connResult != null) {
                         retryConnect(connResult.device, connResult.lostConnection, connResult.resultCode);
+                    }
+                    break;
+                }
+
+                case MESSAGE_CONN_FAILED:{
+                    if(mConnectCallback != null) {
+                        mConnectCallback.onConnectFailed();
+                    }
+                    break;
+                }
+
+                case MESSAGE_CONN_SUCCESS:{
+                    if(mConnectCallback != null) {
+                        BluetoothDevice device = (BluetoothDevice)msg.obj;
+                        mConnectCallback.onConnectSuccess(device);
+                    }
+                    break;
+                }
+
+                case MESSAGE_RECEIVE_DATA:{
+                    if(mConnectCallback != null){
+                        mConnectCallback.onReceive((String)msg.obj);
                     }
                     break;
                 }
@@ -252,7 +289,11 @@ public class BLEManager {
                         mCurrentBluetoothGatt = gatt;
                         logd("连接成功");
                         if(mConnectCallback != null) {
-                            mConnectCallback.connectSuccess(gatt.getDevice());
+                            Message msg = Message.obtain();
+                            msg.what = MESSAGE_CONN_SUCCESS;
+                            msg.obj = gatt.getDevice();
+
+                            mMainHandler.sendMessage(msg);
                         }
                     }
                 } else {
@@ -305,9 +346,11 @@ public class BLEManager {
                     String result = new String(mGlobalResultBytes);
                     logd("result : " + result);
 
-                    if(mConnectCallback!=null){
-                        mConnectCallback.onReceive(result);
-                    }
+                    Message msg = Message.obtain();
+                    msg.what = MESSAGE_RECEIVE_DATA;
+                    msg.obj = result;
+
+                    mMainHandler.sendMessage(msg);
 
                     mGlobalResultBytes = null;
                 }
@@ -436,9 +479,8 @@ public class BLEManager {
             mMainHandler.sendMessageDelayed(msg, RETRY_TIME_DELAY);
         } else {
             logd("connect failed with try out");
-            if(mConnectCallback != null) {//连接超过最大次数，连接失败
-                mConnectCallback.connectFailed();
-            }
+            mMainHandler.removeMessages(MESSAGE_CONN_FAILED);
+            mMainHandler.sendEmptyMessage(MESSAGE_CONN_FAILED);
         }
 
     }
@@ -621,8 +663,18 @@ public class BLEManager {
      * 连接结果回调
      * */
     public interface ConnectCallback{
-        void connectFailed();
-        void connectSuccess(BluetoothDevice device);
+        /**
+         * 连接失败
+         * */
+        void onConnectFailed();
+        /**
+         * 连接成功
+         * @param device 连接的设备
+         * */
+        void onConnectSuccess(BluetoothDevice device);
+        /**
+         * 接收到数据
+         * */
         void onReceive(String data);
     }
 
