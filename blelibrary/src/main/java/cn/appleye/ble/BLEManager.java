@@ -251,6 +251,9 @@ public class BLEManager {
                         gatt.discoverServices();
                         mCurrentBluetoothGatt = gatt;
                         logd("连接成功");
+                        if(mConnectCallback != null) {
+                            mConnectCallback.connectSuccess(gatt.getDevice());
+                        }
                     }
                 } else {
                     logd("connect error, status = " + status + ", newState = " + newState);
@@ -366,6 +369,16 @@ public class BLEManager {
      * */
     public void scanDevices(DeviceScanCallback callback) {
         scanDevices(TIME_OUT_SCAN, callback);
+    }
+
+    /**
+     * 停止扫描
+     * */
+    public void stopScan() {
+        if(mScanner != null) {
+            logd("[stopScan] stop scan");
+            mScanner.stopScan();
+        }
     }
 
     /**
@@ -609,6 +622,7 @@ public class BLEManager {
      * */
     public interface ConnectCallback{
         void connectFailed();
+        void connectSuccess(BluetoothDevice device);
         void onReceive(String data);
     }
 
