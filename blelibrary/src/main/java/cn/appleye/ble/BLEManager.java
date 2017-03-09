@@ -90,9 +90,14 @@ public class BLEManager {
     private static final int MESSAGE_CONN_SUCCESS = 1004;
 
     /**
+     * 服务准备好的消息
+     * */
+    private static final int MESSAGE_SERVICE_READY = 1005;
+
+    /**
      * 收到数据
      * */
-    private static final int MESSAGE_RECEIVE_DATA = 1005;
+    private static final int MESSAGE_RECEIVE_DATA = 1006;
 
     /**
      * 重试延迟时间
@@ -195,6 +200,14 @@ public class BLEManager {
                     break;
                 }
 
+                case MESSAGE_SERVICE_READY:{
+                    if(mConnectCallback != null) {
+                        boolean ready = (boolean)msg.obj;
+                        mConnectCallback.onServiceSubscribed(ready);
+                    }
+                    break;
+                }
+
                 case MESSAGE_RECEIVE_DATA:{
                     if(mConnectCallback != null){
                         mConnectCallback.onReceive((String)msg.obj);
@@ -253,13 +266,13 @@ public class BLEManager {
     }
 
     private BLEManager() {
-        perpareSomething();
+        prepareSomething();
     }
 
     /**
      * 做一些准备工作
      * */
-    private void perpareSomething() {
+    private void prepareSomething() {
         final BluetoothManager bluetoothManager = (BluetoothManager)sContext.getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
         /*初始化扫描器*/
@@ -321,8 +334,11 @@ public class BLEManager {
                 }
                 logd("onServicesDiscovered");
                 if(status == BluetoothGatt.GATT_SUCCESS) {
-                    enableNotificationOfCharacteristic(gatt.getDevice(), gatt, true);
-                    mIsConnected = true;
+                    boolean ready = enableNotificationOfCharacteristic(gatt.getDevice(), gatt, true);
+                    Message msg = Message.obtain();
+                    msg.obj = ready;
+                    mMainHandler.sendMessage(msg);
+                    mIsConnected = ready;
                 }
             }
 
@@ -347,6 +363,7 @@ public class BLEManager {
                     logd("result : " + result);
 
                     Message msg = Message.obtain();
+                    msg.what = MESSAGE_SERVICE_READY;
                     msg.what = MESSAGE_RECEIVE_DATA;
                     msg.obj = result;
 
@@ -364,7 +381,7 @@ public class BLEManager {
      * 是否订阅个特征
      * @param enable true 订阅 false 取消订阅
      * */
-    public void enableNotificationOfCharacteristic(BluetoothDevice device, BluetoothGatt bluetoothGatt, final boolean enable) {
+    public boolean enableNotificationOfCharacteristic(BluetoothDevice device, BluetoothGatt bluetoothGatt, final boolean enable) {
         UUID serviceUUID = UUID.fromString(sServiceUUID);
         UUID charaUUID = UUID.fromString(sCharacteristicUUID);
         if(!bluetoothGatt.equals(null)){
@@ -378,9 +395,12 @@ public class BLEManager {
                     }
                     boolean success = bluetoothGatt.setCharacteristicNotification(chara,enable);
                     logd("[enableNotificationOfCharacteristic] setCharactNotify: "+success);
+                    return success;
                 }
             }
         }
+
+        return false;
     }
 
     /**
@@ -505,6 +525,8 @@ public class BLEManager {
         if(mMessageHandler == null) {
             setupMessageHandler();
         }
+
+        mMessageHandler.sendMessage(message);
     }
 
     /**
@@ -672,6 +694,10 @@ public class BLEManager {
          * @param device 连接的设备
          * */
         void onConnectSuccess(BluetoothDevice device);
+        /**
+         * 服务已订阅
+         * */
+        void onServiceSubscribed(boolean ready);
         /**
          * 接收到数据
          * */
