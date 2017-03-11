@@ -626,7 +626,6 @@ public class BLEManager {
         logd("[closeConnection]");
 
         stopConnection();
-        mBluetoothGattCallback = null;
         mDeviceScanCallback = null;
     }
 
