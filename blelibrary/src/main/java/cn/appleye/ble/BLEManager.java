@@ -336,6 +336,7 @@ public class BLEManager {
                 if(status == BluetoothGatt.GATT_SUCCESS) {
                     boolean ready = enableNotificationOfCharacteristic(gatt.getDevice(), gatt, true);
                     Message msg = Message.obtain();
+                    msg.what = MESSAGE_SERVICE_READY;
                     msg.obj = ready;
                     mMainHandler.sendMessage(msg);
                     mIsConnected = ready;
@@ -363,7 +364,6 @@ public class BLEManager {
                     logd("result : " + result);
 
                     Message msg = Message.obtain();
-                    msg.what = MESSAGE_SERVICE_READY;
                     msg.what = MESSAGE_RECEIVE_DATA;
                     msg.obj = result;
 
@@ -417,6 +417,13 @@ public class BLEManager {
         if(bluetoothAdapter != null && !bluetoothAdapter.isEnabled()) {
             activity.startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));
         }
+    }
+
+    public boolean isBluetoothEnable() {
+        final BluetoothManager bluetoothManager = (BluetoothManager)sContext.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+
+        return bluetoothAdapter != null && bluetoothAdapter.isEnabled();
     }
 
     /**
@@ -625,16 +632,26 @@ public class BLEManager {
     public void closeConnection() {
         logd("[closeConnection]");
 
+        stopScan();
+
         stopConnection();
+
+        /*将所有可能造成内存泄露变量置空*/
         mDeviceScanCallback = null;
+
+        mConnectCallback = null;
+
+        mGlobalResultBytes = null;
+
+        /*移除所有的消息，避免内存泄露*/
+        mMainHandler.removeCallbacksAndMessages(null);
     }
 
     /**
      * 停止所有连接
      * */
-    private void stopConnection() {
+    public void stopConnection() {
         logd("[stopConnection]");
-
         //关闭所有的gatt
         synchronized (mBluetoothGattSet) {
             Iterator<BluetoothGatt> iterator = mBluetoothGattSet.iterator();
