@@ -14,7 +14,7 @@
  * @param serviceUUID 服务UUID
  * @param characteristicUUID 特征值UUID
  * */
-UbtBLEManager.getInstance().install(Application context, String serviceUUID, String characteristicUUID);
+BLEManager.getInstance().install(Application context, String serviceUUID, String characteristicUUID);
 ```
 
 ###2.扫描蓝牙接口
@@ -24,18 +24,18 @@ UbtBLEManager.getInstance().install(Application context, String serviceUUID, Str
  * @param timeout 超时时间
  * @param callback 扫描结果回调
  * */
-UbtBLEManager.getInstance().scanDevices(int timeout, DeviceScanCallback callback)
+BLEManager.getInstance().scanDevices(int timeout, DeviceScanCallback callback)
 或者
 /**
  * 开始扫描设备，缺省的时间是{@link #TIME_OUT_SCAN}
  * @param callback 扫描结果回调
  * */
-UbtBLEManager.getInstance().scanDevices(DeviceScanCallback callback)
+BLEManager.getInstance().scanDevices(DeviceScanCallback callback)
 ```
 
 ###3.设置连接回调
 ```java
-UbtBLEManager.getInstance().setConnectCallback(ConnectCallback connectCallback)
+BLEManager.getInstance().setConnectCallback(ConnectCallback connectCallback)
 ```
 
 ###4.连接设备
@@ -43,7 +43,7 @@ UbtBLEManager.getInstance().setConnectCallback(ConnectCallback connectCallback)
 /**
  * 连接设备
  * */
-UbtBLEManager.getInstance().connect(final BluetoothDevice device)
+BLEManager.getInstance().connect(final BluetoothDevice device)
 ```
 
 ###5.发送数据
@@ -52,7 +52,7 @@ UbtBLEManager.getInstance().connect(final BluetoothDevice device)
  * 发送数据
  * @param data 数据
  * */
-UbtBLEManager.getInstance().sendData(final String data)
+BLEManager.getInstance().sendData(final String data)
 ```
 
 ###6.断开连接
@@ -60,7 +60,7 @@ UbtBLEManager.getInstance().sendData(final String data)
 /**
  * 关闭所有连接
  * */
-UbtBLEManager.getInstance().closeConnection()
+BLEManager.getInstance().closeConnection()
 ```
 
 # About
